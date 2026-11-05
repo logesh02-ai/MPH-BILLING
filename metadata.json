@@ -1,0 +1,6 @@
+{
+  "name": "Maheswari Plywood & Hardware Billing System",
+  "description": "Comprehensive billing, GST invoice generation, inventory management, supplier purchases, customer credit ledger, and profit analytics for Maheswari Plywood & Hardware.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -46,7 +46,8 @@ export function calculateCartTotals(
     const itemNetBeforeBillDisc = itemGross - itemDisc;
     const itemTaxable = itemNetBeforeBillDisc * discountRatio;
 
-    const rate = c.taxRate || 0;
+    const rawRate = c.taxRate || 0;
+    const rate = taxType === 'none' ? 0 : rawRate;
     let cgst = 0;
     let sgst = 0;
     let igst = 0;
@@ -55,7 +56,7 @@ export function calculateCartTotals(
       const halfRate = rate / 2;
       cgst = Number(((itemTaxable * halfRate) / 100).toFixed(2));
       sgst = Number(((itemTaxable * halfRate) / 100).toFixed(2));
-    } else {
+    } else if (taxType === 'inter_state') {
       igst = Number(((itemTaxable * rate) / 100).toFixed(2));
     }
 

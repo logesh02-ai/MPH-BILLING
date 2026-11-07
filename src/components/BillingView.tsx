@@ -126,6 +126,15 @@ export const BillingView: React.FC<BillingViewProps> = ({
     return calculateCartTotals(cart, discountPct, taxType);
   }, [cart, discountPct, taxType]);
 
+  const totalsWithoutGst = useMemo(() => {
+    return calculateCartTotals(cart, discountPct, 'none');
+  }, [cart, discountPct]);
+
+  const totalsWithGst = useMemo(() => {
+    const gstMode = taxType === 'none' ? 'intra_state' : taxType;
+    return calculateCartTotals(cart, discountPct, gstMode);
+  }, [cart, discountPct, taxType]);
+
   const amountPaidNum = amountPaidInput === '' ? totals.total : parseFloat(amountPaidInput) || 0;
   const balanceDue = Math.max(0, totals.total - amountPaidNum);
 
@@ -270,8 +279,8 @@ export const BillingView: React.FC<BillingViewProps> = ({
     setShowAddCustModal(false);
   };
 
-  // Complete Sale
-  const handleFinalizeSale = () => {
+  // Complete Sale (supports both With GST and Without GST)
+  const handleFinalizeSale = (overrideTaxType?: TaxType) => {
     if (cart.length === 0) {
       alert('Cannot complete empty sale. Add items to ticket.');
       return;
@@ -288,12 +297,16 @@ export const BillingView: React.FC<BillingViewProps> = ({
       }
     }
 
+    const effectiveTaxType = overrideTaxType || taxType;
+    const finalTotals = calculateCartTotals(cart, discountPct, effectiveTaxType);
+
     const invNumber = `${shopInfo.invoicePrefix || 'HW-'}${String(
       shopInfo.nextInvoiceNo || 101
     ).padStart(4, '0')}`;
 
-    const paid = amountPaidInput === '' ? totals.total : parseFloat(amountPaidInput) || 0;
-    const due = Math.max(0, totals.total - paid);
+    const paid =
+      amountPaidInput === '' ? finalTotals.total : parseFloat(amountPaidInput) || 0;
+    const due = Math.max(0, finalTotals.total - paid);
 
     let paymentStatus: 'paid' | 'partial' | 'unpaid' = 'paid';
     if (due > 0 && paid > 0) paymentStatus = 'partial';
@@ -306,19 +319,19 @@ export const BillingView: React.FC<BillingViewProps> = ({
       customerId: selectedCustomerId,
       customerName: customerName.trim() || 'Walk-in Customer',
       customerPhone: customerPhone.trim(),
-      customerGst: customerGst.trim().toUpperCase(),
-      items: totals.items,
-      subtotal: totals.subtotal,
-      discountPct: totals.discountPct,
-      discountAmt: totals.discountAmt,
-      taxableAmount: totals.taxableAmount,
-      taxType: totals.taxType,
-      cgstAmount: totals.cgstAmount,
-      sgstAmount: totals.sgstAmount,
-      igstAmount: totals.igstAmount,
-      taxAmt: totals.taxAmt,
-      roundOff: totals.roundOff,
-      total: totals.total,
+      customerGst: effectiveTaxType === 'none' ? '' : customerGst.trim().toUpperCase(),
+      items: finalTotals.items,
+      subtotal: finalTotals.subtotal,
+      discountPct: finalTotals.discountPct,
+      discountAmt: finalTotals.discountAmt,
+      taxableAmount: finalTotals.taxableAmount,
+      taxType: finalTotals.taxType,
+      cgstAmount: finalTotals.cgstAmount,
+      sgstAmount: finalTotals.sgstAmount,
+      igstAmount: finalTotals.igstAmount,
+      taxAmt: finalTotals.taxAmt,
+      roundOff: finalTotals.roundOff,
+      total: finalTotals.total,
       paymentMethod,
       amountPaid: paid,
       balanceDue: due,
@@ -668,6 +681,7 @@ export const BillingView: React.FC<BillingViewProps> = ({
                 >
                   <option value="intra_state">Intra-State (CGST + SGST)</option>
                   <option value="inter_state">Inter-State (IGST)</option>
+                  <option value="none">Without GST (0% Cash Bill)</option>
                 </select>
               </div>
 
@@ -702,16 +716,20 @@ export const BillingView: React.FC<BillingViewProps> = ({
                 </div>
               )}
               <div className="flex justify-between">
-                <span>Taxable Value:</span>
+                <span>{taxType === 'none' ? 'Net Bill Amount:' : 'Taxable Value:'}</span>
                 <span>{formatINR(totals.taxableAmount)}</span>
               </div>
               <div className="flex justify-between">
                 <span>
-                  {taxType === 'intra_state'
-                    ? `Total GST (CGST+SGST):`
-                    : `Total GST (IGST):`}
+                  {taxType === 'none'
+                    ? 'GST (Without GST Bill):'
+                    : taxType === 'intra_state'
+                    ? 'Total GST (CGST+SGST):'
+                    : 'Total GST (IGST):'}
                 </span>
-                <span>+{formatINR(totals.taxAmt)}</span>
+                <span>
+                  {taxType === 'none' ? '₹0.00 (0%)' : `+${formatINR(totals.taxAmt)}`}
+                </span>
               </div>
               {totals.roundOff !== 0 && (
                 <div className="flex justify-between text-[11px] text-slate-400">
@@ -722,9 +740,23 @@ export const BillingView: React.FC<BillingViewProps> = ({
                 </div>
               )}
               <div className="flex justify-between text-base font-bold text-slate-900 pt-1 border-t border-slate-200">
-                <span className="font-display">Total Amount:</span>
+                <span className="font-display">
+                  {taxType === 'none' ? 'Total (Without GST):' : 'Total (With GST):'}
+                </span>
                 <span className="text-blue-700">{formatINR(totals.total)}</span>
               </div>
+              {cart.length > 0 && (
+                <div className="flex justify-between text-[11px] text-slate-500 pt-0.5">
+                  <span>
+                    {taxType === 'none' ? 'With GST Invoice Total:' : 'Without GST Bill Total:'}
+                  </span>
+                  <span className="font-semibold text-orange-600">
+                    {taxType === 'none'
+                      ? formatINR(totalsWithGst.total)
+                      : formatINR(totalsWithoutGst.total)}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Payment Method Selector */}
@@ -795,30 +827,53 @@ export const BillingView: React.FC<BillingViewProps> = ({
             </div>
           </div>
 
-          {/* Ticket Footer Action Buttons */}
-          <div className="p-3.5 border-t border-slate-200 bg-white flex gap-2">
-            <button
-              onClick={() => setCart([])}
-              disabled={cart.length === 0}
-              className="flex-1 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors disabled:opacity-40"
-            >
-              Clear
-            </button>
+          {/* Ticket Footer Action Buttons — Supports Both GST Invoice & Without GST Bill */}
+          <div className="p-3.5 border-t border-slate-200 bg-white space-y-2">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCart([])}
+                disabled={cart.length === 0}
+                className="px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors disabled:opacity-40 cursor-pointer"
+              >
+                Clear
+              </button>
 
-            <button
-              onClick={() => {
-                if (cart.length === 0) {
-                  alert('Cart is empty. Please select products first.');
-                  return;
-                }
-                setShowConfirmModal(true);
-              }}
-              disabled={cart.length === 0}
-              className="flex-2 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-md shadow-xs transition-colors disabled:opacity-40 flex items-center justify-center gap-1.5"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Complete Sale ({formatINR(totals.total)})</span>
-            </button>
+              <button
+                onClick={() => {
+                  if (cart.length === 0) {
+                    alert('Cart is empty. Please select products first.');
+                    return;
+                  }
+                  setTaxType('none');
+                  setShowConfirmModal(true);
+                }}
+                disabled={cart.length === 0}
+                className="flex-1 py-2 px-2.5 text-xs font-semibold text-white bg-orange-600 hover:bg-orange-700 active:bg-orange-800 rounded-md shadow-xs transition-colors disabled:opacity-40 flex items-center justify-center gap-1 cursor-pointer"
+                title="Generate Cash / Estimate Bill Without GST (0% Tax)"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Bill Without GST ({formatINR(totalsWithoutGst.total)})</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (cart.length === 0) {
+                    alert('Cart is empty. Please select products first.');
+                    return;
+                  }
+                  if (taxType === 'none') {
+                    setTaxType('intra_state');
+                  }
+                  setShowConfirmModal(true);
+                }}
+                disabled={cart.length === 0}
+                className="flex-1 py-2 px-2.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-md shadow-xs transition-colors disabled:opacity-40 flex items-center justify-center gap-1 cursor-pointer"
+                title="Generate Official GST Tax Invoice"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                <span>GST Invoice ({formatINR(totalsWithGst.total)})</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -827,12 +882,46 @@ export const BillingView: React.FC<BillingViewProps> = ({
       {showConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 border border-slate-200 space-y-4">
-            <h3 className="text-lg font-display font-bold text-slate-900">
-              Confirm &amp; Complete Sale
-            </h3>
-            <p className="text-xs text-slate-600">
-              Please verify invoice details before completing the sale. Stock will be deducted automatically.
-            </p>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-display font-bold text-slate-900">
+                Confirm &amp; Generate Bill
+              </h3>
+              <span
+                className={`text-[11px] font-mono-num font-bold px-2.5 py-0.5 rounded uppercase ${
+                  taxType === 'none'
+                    ? 'bg-orange-100 text-orange-800 border border-orange-300'
+                    : 'bg-blue-100 text-blue-800 border border-blue-300'
+                }`}
+              >
+                {taxType === 'none' ? 'Without GST (0%)' : 'GST Tax Invoice'}
+              </span>
+            </div>
+
+            {/* Mode Switcher inside Confirmation Modal */}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setTaxType(taxType === 'none' ? 'intra_state' : taxType)}
+                className={`py-1.5 px-2 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  taxType !== 'none'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                With GST ({formatINR(totalsWithGst.total)})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTaxType('none')}
+                className={`py-1.5 px-2 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  taxType === 'none'
+                    ? 'bg-orange-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Without GST ({formatINR(totalsWithoutGst.total)})
+              </button>
+            </div>
 
             <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-md space-y-2 text-xs font-mono-num">
               <div className="flex justify-between">
@@ -846,7 +935,17 @@ export const BillingView: React.FC<BillingViewProps> = ({
                 <span>{cart.length} item(s)</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Total Bill Amount:</span>
+                <span className="text-slate-500">Net Taxable / Base Value:</span>
+                <span>{formatINR(totals.taxableAmount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">GST Amount:</span>
+                <span>
+                  {taxType === 'none' ? '₹0.00 (Without GST)' : `+${formatINR(totals.taxAmt)}`}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-slate-200 pt-1.5">
+                <span className="text-slate-700 font-bold">Total Bill Payable:</span>
                 <span className="font-bold text-slate-900 text-sm">
                   {formatINR(totals.total)}
                 </span>
@@ -880,16 +979,24 @@ export const BillingView: React.FC<BillingViewProps> = ({
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
               <button
                 onClick={() => setShowConfirmModal(false)}
-                className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded"
+                className="px-3.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded cursor-pointer"
               >
                 Cancel
               </button>
               <button
-                onClick={handleFinalizeSale}
-                className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded shadow-xs"
+                onClick={() => handleFinalizeSale('none')}
+                className="px-4 py-2 text-xs font-semibold text-white bg-orange-600 hover:bg-orange-700 rounded shadow-xs cursor-pointer"
+              >
+                Generate Bill (Without GST)
+              </button>
+              <button
+                onClick={() =>
+                  handleFinalizeSale(taxType === 'none' ? 'intra_state' : taxType)
+                }
+                className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded shadow-xs cursor-pointer"
               >
                 Generate GST Invoice
               </button>

@@ -51,7 +51,7 @@ export type PaymentMethod =
 
 export type PaymentStatus = 'paid' | 'partial' | 'unpaid' | 'returned';
 
-export type TaxType = 'intra_state' | 'inter_state'; // intra = CGST + SGST, inter = IGST
+export type TaxType = 'intra_state' | 'inter_state' | 'none'; // intra = CGST + SGST, inter = IGST, none = Without GST (Cash Bill)
 
 export interface InvoiceItem {
   productId: string;

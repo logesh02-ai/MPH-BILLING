@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, ReceiptText, Boxes, Wallet, Download, CheckCircle2 } from 'lucide-react';
+import { Plus, ReceiptText, Boxes, Wallet, Download, CheckCircle2, Laptop } from 'lucide-react';
 import { NavTab } from './Sidebar';
 import { formatINR } from '../utils/numberToWords';
 
@@ -10,6 +10,7 @@ interface HeaderProps {
   todayInvoicesCount: number;
   onQuickBackup: () => void;
   onNewBill: () => void;
+  onOpenDownloadModal: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -19,6 +20,7 @@ export const Header: React.FC<HeaderProps> = ({
   todayInvoicesCount,
   onQuickBackup,
   onNewBill,
+  onOpenDownloadModal,
 }) => {
   const [currentDateTime, setCurrentDateTime] = useState('');
 
@@ -118,7 +120,7 @@ export const Header: React.FC<HeaderProps> = ({
           {activeTab !== 'billing' && (
             <button
               onClick={onNewBill}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-md shadow-xs transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-md shadow-xs transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>New Bill</span>
@@ -126,9 +128,18 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           <button
+            onClick={onOpenDownloadModal}
+            title="Download Software to Your Laptop"
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-orange-600 hover:bg-orange-700 active:bg-orange-800 rounded-md shadow-xs transition-colors cursor-pointer"
+          >
+            <Laptop className="w-3.5 h-3.5" />
+            <span>Download to Laptop</span>
+          </button>
+
+          <button
             onClick={onQuickBackup}
             title="Download JSON Backup File"
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-md transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-md transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
             <span className="hidden sm:inline">Backup</span>

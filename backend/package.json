@@ -1,0 +1,21 @@
+{
+  "name": "maheswari-plywood-backend",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Backend REST API & Database Engine for Maheswari Plywood & Hardware Billing System",
+  "scripts": {
+    "dev": "tsx watch server.ts",
+    "start": "tsx server.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.14.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.8.2"
+  }
+}

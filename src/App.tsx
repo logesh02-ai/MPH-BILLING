@@ -11,6 +11,8 @@ import { ExpensesView } from './components/ExpensesView';
 import { ReportsView } from './components/ReportsView';
 import { SettingsView } from './components/SettingsView';
 import { InvoiceModal } from './components/InvoiceModal';
+import { PrintBillPage } from './components/PrintBillPage';
+import { DownloadAppModal } from './components/DownloadAppModal';
 import {
   AppStoreData,
   Customer,
@@ -35,6 +37,8 @@ export default function App() {
   const [store, setStore] = useState<AppStoreData>(() => loadStore());
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
   const [activeInvoiceModal, setActiveInvoiceModal] = useState<Invoice | null>(null);
+  const [printingInvoice, setPrintingInvoice] = useState<Invoice | null>(null);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string) => {
@@ -587,8 +591,23 @@ export default function App() {
     showToast('Backup file downloaded.');
   }, [showToast]);
 
+  const handleOpenPrintPage = useCallback((inv: Invoice) => {
+    setActiveInvoiceModal(null);
+    setPrintingInvoice(inv);
+  }, []);
+
+  if (printingInvoice) {
+    return (
+      <PrintBillPage
+        invoice={printingInvoice}
+        shopInfo={store.shopInfo}
+        onBack={() => setPrintingInvoice(null)}
+      />
+    );
+  }
+
   return (
-    <div className="flex min-h-screen bg-slate-100 font-sans text-slate-900 antialiased">
+    <div id="app-root-shell" className="flex min-h-screen bg-slate-100 font-sans text-slate-900 antialiased">
       {/* Dark Sidebar */}
       <Sidebar
         activeTab={activeTab}
@@ -601,7 +620,7 @@ export default function App() {
       />
 
       {/* Main Workspace */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div id="app-main-workspace" className="flex-1 flex flex-col min-w-0 no-print">
         <Header
           activeTab={activeTab}
           onNavigate={setActiveTab}
@@ -609,6 +628,7 @@ export default function App() {
           todayInvoicesCount={todaySalesStats.count}
           onQuickBackup={handleQuickBackup}
           onNewBill={() => setActiveTab('billing')}
+          onOpenDownloadModal={() => setShowDownloadModal(true)}
         />
 
         <main className="flex-1 overflow-y-auto">
@@ -617,9 +637,12 @@ export default function App() {
               products={store.products}
               invoices={store.invoices}
               customers={store.customers}
+              shopInfo={store.shopInfo}
               onNavigate={setActiveTab}
               onPreviewInvoice={setActiveInvoiceModal}
+              onPrintInvoice={handleOpenPrintPage}
               onQuickRestock={handleQuickRestock}
+              onOpenDownloadModal={() => setShowDownloadModal(true)}
             />
           )}
 
@@ -652,7 +675,9 @@ export default function App() {
           {activeTab === 'history' && (
             <InvoiceHistoryView
               invoices={store.invoices}
+              shopInfo={store.shopInfo}
               onSelectInvoice={setActiveInvoiceModal}
+              onPrintInvoice={handleOpenPrintPage}
               onProcessReturn={handleProcessReturn}
             />
           )}
@@ -715,12 +740,21 @@ export default function App() {
           invoice={activeInvoiceModal}
           shopInfo={store.shopInfo}
           onClose={() => setActiveInvoiceModal(null)}
+          onOpenPrintPage={handleOpenPrintPage}
+        />
+      )}
+
+      {/* Download to Laptop Modal */}
+      {showDownloadModal && (
+        <DownloadAppModal
+          onClose={() => setShowDownloadModal(false)}
+          onDownloadBackupJson={handleQuickBackup}
         />
       )}
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-md shadow-xl text-xs font-mono-num border border-slate-700 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-md shadow-xl text-xs font-mono-num border border-slate-700 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-200 no-print">
           <span className="w-2 h-2 rounded-full bg-emerald-400" />
           <span>{toastMessage}</span>
         </div>

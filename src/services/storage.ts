@@ -664,6 +664,142 @@ export function loadStore(): AppStoreData {
         };
       });
 
+      // Normalize legacy invoices (e.g. HW-0001, HW-0002, HW-0003 from v1 HTML app)
+      migrated.invoices = migrated.invoices.map((inv, idx) => {
+        const rawInv = inv as unknown as Record<string, unknown>;
+        const subtotal = Number(rawInv.subtotal) || 0;
+        const discountPct = Number(rawInv.discountPct) || 0;
+        const discountAmt = Number(rawInv.discountAmt) || 0;
+        const taxAmt = Number(rawInv.taxAmt) || 0;
+        const rawTotal = Number(rawInv.total) || 0;
+        const rawTaxable = Number(rawInv.taxableAmount) || 0;
+        const taxableAmount =
+          rawTaxable > 0
+            ? rawTaxable
+            : subtotal - discountAmt > 0
+            ? Number((subtotal - discountAmt).toFixed(2))
+            : Math.max(0, Number((rawTotal - taxAmt).toFixed(2)));
+        const total = rawTotal > 0 ? rawTotal : Number((taxableAmount + taxAmt).toFixed(2));
+        const taxType = (rawInv.taxType as 'intra_state' | 'inter_state') || 'intra_state';
+        const cgstAmount =
+          rawInv.cgstAmount !== undefined
+            ? Number(rawInv.cgstAmount)
+            : taxType === 'intra_state'
+            ? Number((taxAmt / 2).toFixed(2))
+            : 0;
+        const sgstAmount =
+          rawInv.sgstAmount !== undefined
+            ? Number(rawInv.sgstAmount)
+            : taxType === 'intra_state'
+            ? Number((taxAmt / 2).toFixed(2))
+            : 0;
+        const igstAmount =
+          rawInv.igstAmount !== undefined
+            ? Number(rawInv.igstAmount)
+            : taxType === 'inter_state'
+            ? Number(taxAmt.toFixed(2))
+            : 0;
+
+        const rawItems = Array.isArray(rawInv.items) ? rawInv.items : [];
+        const normalizedItems = rawItems.map((itemObj: Record<string, unknown>, iIdx: number) => {
+          const qty = Number(itemObj.qty) || 1;
+          const price = Number(itemObj.price ?? itemObj.sellingPrice) || 0;
+          const itemDiscPct = Number(itemObj.itemDiscountPct) || 0;
+          const itemDiscAmt = Number(itemObj.itemDiscountAmt) || Number(((qty * price * itemDiscPct) / 100).toFixed(2));
+          const lineGross = Math.max(0, qty * price - itemDiscAmt);
+          // Proportionally apply bill discount if item taxableAmount is missing
+          const billDiscShare = subtotal > 0 ? (lineGross / subtotal) * discountAmt : 0;
+          const itemTaxable =
+            itemObj.taxableAmount !== undefined && Number(itemObj.taxableAmount) > 0
+              ? Number(itemObj.taxableAmount)
+              : Number(Math.max(0, lineGross - billDiscShare).toFixed(2));
+          const taxRate =
+            itemObj.taxRate !== undefined
+              ? Number(itemObj.taxRate)
+              : taxableAmount > 0 && taxAmt === 0
+              ? 0
+              : 18;
+          const itemTaxTotal = Number(((itemTaxable * taxRate) / 100).toFixed(2));
+          const itemCgst =
+            itemObj.cgstAmount !== undefined
+              ? Number(itemObj.cgstAmount)
+              : taxType === 'intra_state'
+              ? Number((itemTaxTotal / 2).toFixed(2))
+              : 0;
+          const itemSgst =
+            itemObj.sgstAmount !== undefined
+              ? Number(itemObj.sgstAmount)
+              : taxType === 'intra_state'
+              ? Number((itemTaxTotal / 2).toFixed(2))
+              : 0;
+          const itemIgst =
+            itemObj.igstAmount !== undefined
+              ? Number(itemObj.igstAmount)
+              : taxType === 'inter_state'
+              ? itemTaxTotal
+              : 0;
+          const itemTotal =
+            itemObj.total !== undefined && Number(itemObj.total) > 0
+              ? Number(itemObj.total)
+              : Number((itemTaxable + itemCgst + itemSgst + itemIgst).toFixed(2));
+
+          return {
+            productId: String(itemObj.productId || itemObj.id || `p_${iIdx}`),
+            name: String(itemObj.name || 'Hardware Item'),
+            sku: String(itemObj.sku || `SKU-${iIdx + 1}`),
+            hsnCode: String(itemObj.hsnCode || '4412'),
+            qty,
+            unit: (itemObj.unit as Invoice['items'][number]['unit']) || 'Pcs',
+            price,
+            purchasePrice: Number(itemObj.purchasePrice) || Math.round(price * 0.75),
+            itemDiscountPct: itemDiscPct,
+            itemDiscountAmt: itemDiscAmt,
+            taxableAmount: itemTaxable,
+            taxRate,
+            cgstAmount: itemCgst,
+            sgstAmount: itemSgst,
+            igstAmount: itemIgst,
+            total: itemTotal,
+          };
+        });
+
+        const amountPaid =
+          rawInv.amountPaid !== undefined ? Number(rawInv.amountPaid) : total;
+        const balanceDue =
+          rawInv.balanceDue !== undefined
+            ? Number(rawInv.balanceDue)
+            : Math.max(0, Number((total - amountPaid).toFixed(2)));
+
+        return {
+          ...inv,
+          id: String(rawInv.id || `inv_${idx + 1}`),
+          number: String(rawInv.number || `HW-000${idx + 1}`),
+          date: String(rawInv.date || new Date().toISOString()),
+          customerName: String(rawInv.customerName || rawInv.customer || 'Walk-in Customer'),
+          customerPhone: String(rawInv.customerPhone || rawInv.phone || ''),
+          customerGst: String(rawInv.customerGst || rawInv.gst || ''),
+          customerAddress: String(rawInv.customerAddress || ''),
+          items: normalizedItems,
+          subtotal,
+          discountPct,
+          discountAmt,
+          taxableAmount,
+          taxType,
+          cgstAmount,
+          sgstAmount,
+          igstAmount,
+          taxAmt,
+          roundOff: Number(rawInv.roundOff) || 0,
+          total,
+          paymentMethod: (rawInv.paymentMethod as Invoice['paymentMethod']) || 'cash',
+          paymentStatus:
+            (rawInv.paymentStatus as Invoice['paymentStatus']) ||
+            (balanceDue > 0 ? 'partial' : 'paid'),
+          amountPaid,
+          balanceDue,
+        };
+      });
+
       cachedData = migrated;
       saveStore(migrated);
       return migrated;
@@ -697,6 +833,15 @@ export function saveStore(data: AppStoreData): boolean {
   try {
     cachedData = data;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    if (typeof window !== 'undefined' && window.location.protocol !== 'file:') {
+      fetch('/api/store', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }).catch(() => {
+        // Offline or standalone mode: localStorage already has the latest state
+      });
+    }
     return true;
   } catch (e) {
     console.error('Failed to save store to localStorage', e);
